@@ -33,6 +33,11 @@
 //   `length`. As a special case, if `length` is the string "none" then
 //   there will be no truncation. The default is "none".
 //
+// renderjson.set_max_item_length(length)
+//   Items in a list/dict will be truncated and made expandable if they are longer than
+//   `length`. As a special case, if `length` is the string "none" then
+//   there will be no truncation. The default is "none".
+//
 // renderjson.set_sort_objects(sort_bool)
 //   Sort objects by key (default: false)
 //
@@ -117,7 +122,7 @@ var module, window, define, renderjson=(function() {
                    themetext(type+ " syntax", close));
 
             var el = append(span(), text(my_indent.slice(0,-1)), empty);
-            if (show_level > 0 && type != "string")
+            if (show_level > 0 && type != "string" && (!placeholder.endsWith(" items ...")))
                 show();
             return el;
         };
@@ -136,16 +141,30 @@ var module, window, define, renderjson=(function() {
         if (json.constructor == Array) {
             if (json.length == 0) return themetext(null, my_indent, "array syntax", "[]");
 
-            return disclosure("[", options.collapse_msg(json.length), "]", "array", function () {
+            function arrayBuilder(){
                 var as = append(span("array"), themetext("array syntax", "[", null, "\n"));
-                for (var i=0; i<json.length; i++)
-                    append(as,
-                           _renderjson(options.replacer.call(json, i, json[i]), indent+"    ", false, show_level-1, options),
-                           i != json.length-1 ? themetext("syntax", ",") : [],
-                           text("\n"));
+                for (var i=0; i<json.length; i++){
+                    if(options.max_item_length != "none" && i >= options.max_item_length){
+                        json = json.slice(i,json.length)
+                        //append(as, themetext(null, indent, "array syntax", ""));
+                        // when i have line above there are too many tabs but 
+                        // if i don't have line there are not enough.... :/
+                        append(as, disclosure("[", json.length-i+1 + " items ...", "]", "array", arrayBuilder));
+                        append(as, text("\n"))
+                        break;                       
+                    }
+                    else{
+                        append(as,
+                            _renderjson(options.replacer.call(json, i, json[i]), indent+"    ", false, show_level-1, options),
+                            i != json.length-1 ? themetext("syntax", ",") : [],
+                            text("\n"));
+                    }
+                }
                 append(as, themetext(null, indent, "array syntax", "]"));
                 return as;
-            });
+            }
+
+            return disclosure("[", options.collapse_msg(json.length), "]", "array", arrayBuilder);
         }
 
         // object
@@ -190,6 +209,10 @@ var module, window, define, renderjson=(function() {
                                                                                                  length.toLowerCase() === "none" ? Number.MAX_VALUE
                                                                                                                                  : length;
                                                           return renderjson; };
+    renderjson.set_max_item_length = function(length) { renderjson.options.max_item_length = typeof length == "string" &&
+                                                                                                 length.toLowerCase() === "none" ? Number.MAX_VALUE
+                                                                                                                                 : length;
+                                                          return renderjson; };
     renderjson.set_sort_objects = function(sort_bool) { renderjson.options.sort_objects = sort_bool;
                                                         return renderjson; };
     renderjson.set_replacer = function(replacer) { renderjson.options.replacer = replacer;
@@ -206,6 +229,7 @@ var module, window, define, renderjson=(function() {
     renderjson.set_show_by_default(false);
     renderjson.set_sort_objects(false);
     renderjson.set_max_string_length("none");
+    renderjson.set_max_item_length(2);
     renderjson.set_replacer(void 0);
     renderjson.set_property_list(void 0);
     renderjson.set_collapse_msg(function(len){return len + " items"})
